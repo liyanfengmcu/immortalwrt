@@ -125,9 +125,6 @@ jobs:
           CONFIG_DEVEL=y
           # CONFIG_CCACHE is not set
 
-          # 跳过有问题的包
-          # CONFIG_PACKAGE_libffi is not set
-
           EOF
 
           # 添加用户自定义软件包
@@ -136,6 +133,29 @@ jobs:
               echo "CONFIG_PACKAGE_${pkg}=y" >> .config
             done
           fi
+
+      - name: 禁用问题软件包
+        run: |
+          cd immortalwrt
+          
+          # 彻底禁用 libffi 包 (编译会失败)
+          # 方法1: 从 feeds 中移除包定义
+          rm -rf feeds/packages/libs/libffi 2>/dev/null || true
+          
+          # 方法2: 在配置中显式禁用
+          cat >> .config << 'EOF'
+          # 强制禁用 libffi (编译会失败)
+          CONFIG_PACKAGE_libffi=n
+          CONFIG_LIBFFI_OPTIMIZE_SPEED=n
+          EOF
+          
+          # 方法3: 标记包为损坏
+          if [ -f "feeds/packages.index" ]; then
+            sed -i 's/Priority: optional/Priority: broken/; /Package: libffi/,/@@/d' feeds/packages.index 2>/dev/null || true
+          fi
+          
+          echo "已禁用问题包: libffi"
+          grep -i "libffi" .config || echo "配置中无 libffi 依赖"
 
       - name: 显示完整配置
         run: |
@@ -156,6 +176,17 @@ jobs:
         run: |
           cd immortalwrt
           make defconfig
+          
+          # 再次确保 libffi 被禁用 (defconfig 可能会重新启用它)
+          sed -i 's/CONFIG_PACKAGE_libffi=y/CONFIG_PACKAGE_libffi=n/' .config 2>/dev/null || true
+          sed -i 's/CONFIG_LIBFFI_OPTIMIZE_SPEED=y/CONFIG_LIBFFI_OPTIMIZE_SPEED=n/' .config 2>/dev/null || true
+          if ! grep -q "CONFIG_PACKAGE_libffi" .config; then
+            echo "CONFIG_PACKAGE_libffi=n" >> .config
+          fi
+          
+          echo "检查 libffi 配置状态:"
+          grep -i "libffi" .config || echo "libffi 已完全禁用"
+          
           JOBS=$(nproc)
           echo "使用 ${JOBS} 线程下载"
           make download -j${JOBS}
@@ -263,7 +294,7 @@ jobs:
           echo "- **设备**: ${DEVICE}" >> $GITHUB_STEP_SUMMARY
           echo "- **版本**: ${IMMORTALWRT_VERSION}" >> $GITHUB_STEP_SUMMARY
           echo "- **编译时间**: $(date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_STEP_SUMMARY
-          echo "- **编译结果**: ${steps.compile.outputs.compile_status}" >> $GITHUB_STEP_SUMMARY
+          echo "- **编译结果**: ${{ steps.compile.outputs.compile_status }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## 固件文件列表" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
