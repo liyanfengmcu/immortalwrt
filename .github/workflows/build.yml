@@ -180,15 +180,25 @@ jobs:
         run: |
           cd immortalwrt
           mkdir -p firmware
-          # 只复制完整镜像文件(.img, .img.gz),排除 .itb
-          find bin/targets/${TARGET}/${SUBTARGET} -maxdepth 1 -type f \( \
-            -name "*.img" -o -name "*.img.gz" \
-          \) -exec cp {} firmware/ \;
+          
+          # 复制并解压镜像文件
+          for img_gz in bin/targets/${TARGET}/${SUBTARGET}/*.img.gz; do
+            if [ -f "$img_gz" ]; then
+              echo "解压: $(basename $img_gz)"
+              gunzip -c "$img_gz" > "firmware/$(basename ${img_gz%.gz})"
+            fi
+          done
+          
+          # 复制未压缩的镜像文件（如果有）
+          find bin/targets/${TARGET}/${SUBTARGET} -maxdepth 1 -type f -name "*.img" -exec cp {} firmware/ \;
+          
           # 复制 config.buildinfo (编译配置信息)
           find bin/targets/${TARGET}/${SUBTARGET} -maxdepth 1 -type f -name "config.buildinfo" -exec cp {} firmware/ \;
+          
           cd firmware
           # 生成 SHA256 校验文件
           sha256sum * > sha256sums.txt
+          
           echo "## 编译信息" >> $GITHUB_STEP_SUMMARY
           echo "- **设备**: ${DEVICE}" >> $GITHUB_STEP_SUMMARY
           echo "- **版本**: ${IMMORTALWRT_VERSION}" >> $GITHUB_STEP_SUMMARY
@@ -196,230 +206,6 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## 固件文件列表" >> $GITHUB_STEP_SUMMARY
           ls -lh >> $GITHUB_STEP_SUMMARY
-
-      - name: 生成 rkdeveloptool 刷机工具
-        run: |
-          cd immortalwrt
-          mkdir -p rkflash
-          
-          echo "创建 rkdeveloptool 刷机工具包..."
-          
-          # 创建 rkdeveloptool 刷机脚本
-          cat > rkflash/flash.sh << 'FLASH_SCRIPT'
-          #!/bin/bash
-          # rkdeveloptool 刷机脚本
-          # 使用方法: sudo ./flash.sh [openwrt.img]
-          
-          set -e
-          
-          IMG_FILE="${1:-openwrt.img}"
-          
-          if [ ! -f "$IMG_FILE" ]; then
-            echo "错误: 找不到固件文件 $IMG_FILE"
-            exit 1
-          fi
-          
-          echo "=== rkdeveloptool 刷机工具 ==="
-          echo "固件文件: $IMG_FILE"
-          echo ""
-          
-          # 检查设备连接
-          echo "检测设备..."
-          rkdeveloptool ld
-          
-          echo ""
-          echo "重要提示:"
-          echo "1. 确保设备已进入 Mask ROM 模式"
-          echo "2. 按住 RECOVERY 按钮并连接 USB"
-          echo "3. 或按住 RECOVERY + RESET 按钮"
-          echo ""
-          read -p "按回车继续刷机..."
-          
-          # 下载 bootloader
-          echo "下载 bootloader..."
-          rkdeveloptool db rk356x_loader_v1.15.125.bin
-          
-          # 写入完整镜像
-          echo "写入固件..."
-          rkdeveloptool wl 0 "$IMG_FILE"
-          
-          # 重启设备
-          echo "重启设备..."
-          rkdeveloptool rd
-          
-          echo "刷机完成!"
-          FLASH_SCRIPT
-          
-          chmod +x rkflash/flash.sh
-          
-          # 创建 Windows 刷机批处理
-          cat > rkflash/flash.bat << 'FLASH_BAT'
-          @echo off
-          REM rkdeveloptool 刷机脚本 (Windows)
-          REM 使用方法: flash.bat openwrt.img
-          
-          set IMG_FILE=%1
-          if "%IMG_FILE%"=="" set IMG_FILE=openwrt.img
-          
-          echo === rkdeveloptool 刷机工具 ===
-          echo 固件文件: %IMG_FILE%
-          echo.
-          
-          REM 检查设备
-          echo 检测设备...
-          rkdeveloptool ld
-          
-          echo.
-          echo 重要提示:
-          echo 1. 确保设备已进入 Mask ROM 模式
-          echo 2. 按住 RECOVERY 按钮并连接 USB
-          echo.
-          pause
-          
-          REM 下载 bootloader
-          echo 下载 bootloader...
-          rkdeveloptool db rk356x_loader_v1.15.125.bin
-          
-          REM 写入固件
-          echo 写入固件...
-          rkdeveloptool wl 0 %IMG_FILE%
-          
-          REM 重启
-          echo 重启设备...
-          rkdeveloptool rd
-          
-          echo 刷机完成!
-          pause
-          FLASH_BAT
-          
-          # 创建分区单独刷机脚本
-          cat > rkflash/flash_partitions.sh << 'PART_SCRIPT'
-          #!/bin/bash
-          # 分区单独刷机脚本
-          # 适用于需要单独更新某个分区的场景
-          
-          echo "=== 分区刷机工具 ==="
-          echo "可用操作:"
-          echo "  1) 写入完整镜像"
-          echo "  2) 仅更新 boot 分区"
-          echo "  3) 仅更新 rootfs 分区"
-          echo "  4) 重启设备"
-          echo ""
-          read -p "选择操作 [1-4]: " choice
-          
-          case $choice in
-            1)
-              rkdeveloptool wl 0 openwrt.img
-              ;;
-            2)
-              # boot 分区通常在扇区 32768 (16MB偏移)
-              rkdeveloptool wl 64 partitions/partition_1.img
-              ;;
-            3)
-              # rootfs 分区通常在扇区 229376 (112MB偏移)
-              rkdeveloptool wl 45056 partitions/partition_2.img
-              ;;
-            4)
-              rkdeveloptool rd
-              ;;
-            *)
-              echo "无效选择"
-              ;;
-          esac
-          PART_SCRIPT
-          
-          chmod +x rkflash/flash_partitions.sh
-          
-          # 下载 RK356x bootloader
-          echo "下载 RK356x bootloader..."
-          curl -fsSL "https://github.com/nickswalker/rk3568-toolchain/raw/main/rk356x_loader_v1.15.125.bin" -o rkflash/rk356x_loader_v1.15.125.bin || \
-          curl -fsSL "https://dl.google.com/adb/rk356x_loader_v1.15.125.bin" -o rkflash/rk356x_loader_v1.15.125.bin || \
-          echo "警告: 无法下载 bootloader，请手动下载"
-          
-          # 生成说明文件
-          cat > rkflash/README.txt << 'README'
-          ===================================
-             rkdeveloptool 刷机说明
-          ===================================
-          
-          ⚠️ 重要：此工具包不包含固件文件！
-          请先下载对应的固件文件（*-sysupgrade.img.gz），
-          解压后将 .img 文件放到此目录。
-          
-          一、准备工作
-          ------------
-          1. 下载固件文件:
-             从 Release 或 Artifacts 下载 *-sysupgrade.img.gz
-             解压得到 .img 文件，重命名为 openwrt.img
-          
-          2. 下载 rkdeveloptool:
-             Linux: apt install rkdeveloptool
-             Windows: https://github.com/nickswalker/rk3568-toolchain
-          
-          3. 安装驱动 (Windows):
-             - 安装 Rockchip USB Driver
-             - 或使用 Zadig 安装驱动
-          
-          二、进入 Mask ROM 模式
-          ---------------------
-          方法1: 按住 RECOVERY 按钮，连接 USB 线
-          方法2: 按住 RECOVERY + RESET 按钮
-          方法3: 短接板子上的 Mask ROM 测试点
-          
-          三、刷机步骤
-          ------------
-          Linux:
-            sudo ./flash.sh openwrt.img
-          
-          Windows:
-            双击 flash.bat
-          
-          四、手动刷机命令
-          ---------------
-          # 检测设备
-          rkdeveloptool ld
-          
-          # 下载 bootloader
-          rkdeveloptool db rk356x_loader_v1.15.125.bin
-          
-          # 写入固件
-          rkdeveloptool wl 0 openwrt.img
-          
-          # 重启
-          rkdeveloptool rd
-          
-          五、分区偏移参考 (RK3568)
-          -----------------------
-          扇区 0-64:      未使用/保留
-          扇区 64-16384:  idbloader/uboot (约 8MB)
-          扇区 16384+:    boot + rootfs
-          
-          ===================================
-          README
-          
-          cd rkflash
-          sha256sum * > sha256sums.txt
-          ls -lh
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## rkdeveloptool 刷机文件" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          ls -lh >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-
-      - name: 上传 rkdeveloptool 刷机文件
-        uses: actions/upload-artifact@v4
-        with:
-          name: immortalwrt-${{ env.DEVICE }}-rkflash-${{ github.run_number }}
-          path: immortalwrt/rkflash/*
-          retention-days: 7
-
-      - name: 上传固件
-        uses: actions/upload-artifact@v4
-        with:
-          name: immortalwrt-${{ env.DEVICE }}-${{ env.IMMORTALWRT_VERSION }}-${{ github.run_number }}
-          path: immortalwrt/firmware/*
-          retention-days: 7
 
       - name: 发布 Release
         if: github.event_name == 'workflow_dispatch'
@@ -438,7 +224,6 @@ jobs:
             下载后请校验 SHA256 值
           files: |
             immortalwrt/firmware/*.img
-            immortalwrt/firmware/*.img.gz
             immortalwrt/firmware/config.buildinfo
             immortalwrt/firmware/sha256sums.txt
           draft: false
