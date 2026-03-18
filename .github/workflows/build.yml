@@ -180,11 +180,15 @@ jobs:
         run: |
           cd immortalwrt
           mkdir -p firmware
-          # 只复制文件,不复制 packages 目录
-          find bin/targets/${TARGET}/${SUBTARGET} -maxdepth 1 -type f -exec cp {} firmware/ \;
+          # 只复制完整镜像文件(.img, .img.gz),排除 .itb
+          find bin/targets/${TARGET}/${SUBTARGET} -maxdepth 1 -type f \( \
+            -name "*.img" -o -name "*.img.gz" \
+          \) -exec cp {} firmware/ \;
+          # 复制 config.buildinfo (编译配置信息)
+          find bin/targets/${TARGET}/${SUBTARGET} -maxdepth 1 -type f -name "config.buildinfo" -exec cp {} firmware/ \;
           cd firmware
-          # 只对文件计算哈希,排除目录
-          find . -type f ! -name "sha256sums.txt" -exec sha256sum {} + > sha256sums.txt
+          # 生成 SHA256 校验文件
+          sha256sum * > sha256sums.txt
           echo "## 编译信息" >> $GITHUB_STEP_SUMMARY
           echo "- **设备**: ${DEVICE}" >> $GITHUB_STEP_SUMMARY
           echo "- **版本**: ${IMMORTALWRT_VERSION}" >> $GITHUB_STEP_SUMMARY
@@ -193,54 +197,12 @@ jobs:
           echo "## 固件文件列表" >> $GITHUB_STEP_SUMMARY
           ls -lh >> $GITHUB_STEP_SUMMARY
 
-      - name: 生成 rkdeveloptool 刷机文件
+      - name: 生成 rkdeveloptool 刷机工具
         run: |
           cd immortalwrt
           mkdir -p rkflash
           
-          # 查找 sysupgrade.img 文件
-          IMG_FILE=$(find bin/targets/${TARGET}/${SUBTARGET} -name "*sysupgrade.img*" | head -1)
-          
-          if [ -n "$IMG_FILE" ]; then
-            # 解压 gz 文件（如果是压缩的）
-            if [[ "$IMG_FILE" == *.gz ]]; then
-              gunzip -k "$IMG_FILE"
-              IMG_FILE="${IMG_FILE%.gz}"
-            fi
-            
-            # 复制完整镜像
-            cp "$IMG_FILE" rkflash/openwrt.img
-            
-            # 使用 losetup 挂载镜像并提取分区
-            LOOP_DEV=$(sudo losetup -fP --show "$IMG_FILE")
-            sudo partprobe $LOOP_DEV
-            
-            # 提取各分区
-            mkdir -p rkflash/partitions
-            
-            # 列出分区信息
-            echo "=== 分区信息 ===" 
-            sudo fdisk -l "$IMG_FILE"
-            
-            # 提取分区
-            for part in ${LOOP_DEV}p*; do
-              if [ -e "$part" ]; then
-                part_name=$(basename $part)
-                part_num=$(echo $part_name | sed 's/.*p//')
-                echo "提取分区: $part_name"
-                sudo dd if=$part of=rkflash/partitions/partition_${part_num}.img bs=4M status=progress
-              fi
-            done
-            
-            # 卸载
-            sudo losetup -d $LOOP_DEV
-            
-            # 复制 bootloader 文件（如果存在）
-            if [ -d "bin/targets/${TARGET}/${SUBTARGET}/" ]; then
-              find bin/targets/${TARGET}/${SUBTARGET} -name "idbloader*" -exec cp {} rkflash/ \;
-              find bin/targets/${TARGET}/${SUBTARGET} -name "u-boot*" -exec cp {} rkflash/ \;
-            fi
-          fi
+          echo "创建 rkdeveloptool 刷机工具包..."
           
           # 创建 rkdeveloptool 刷机脚本
           cat > rkflash/flash.sh << 'FLASH_SCRIPT'
@@ -380,13 +342,21 @@ jobs:
              rkdeveloptool 刷机说明
           ===================================
           
+          ⚠️ 重要：此工具包不包含固件文件！
+          请先下载对应的固件文件（*-sysupgrade.img.gz），
+          解压后将 .img 文件放到此目录。
+          
           一、准备工作
           ------------
-          1. 下载 rkdeveloptool:
+          1. 下载固件文件:
+             从 Release 或 Artifacts 下载 *-sysupgrade.img.gz
+             解压得到 .img 文件，重命名为 openwrt.img
+          
+          2. 下载 rkdeveloptool:
              Linux: apt install rkdeveloptool
              Windows: https://github.com/nickswalker/rk3568-toolchain
           
-          2. 安装驱动 (Windows):
+          3. 安装驱动 (Windows):
              - 安装 Rockchip USB Driver
              - 或使用 Zadig 安装驱动
           
@@ -466,7 +436,11 @@ jobs:
             
             ## 固件说明
             下载后请校验 SHA256 值
-          files: immortalwrt/firmware/*
+          files: |
+            immortalwrt/firmware/*.img
+            immortalwrt/firmware/*.img.gz
+            immortalwrt/firmware/config.buildinfo
+            immortalwrt/firmware/sha256sums.txt
           draft: false
           prerelease: false
         env:
