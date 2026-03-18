@@ -178,9 +178,11 @@ jobs:
         run: |
           cd immortalwrt
           mkdir -p firmware
-          cp -r bin/targets/${TARGET}/${SUBTARGET}/* firmware/
+          # 只复制文件,不复制 packages 目录
+          find bin/targets/${TARGET}/${SUBTARGET} -maxdepth 1 -type f -exec cp {} firmware/ \;
           cd firmware
-          sha256sum * > sha256sums.txt
+          # 只对文件计算哈希,排除目录
+          find . -type f ! -name "sha256sums.txt" -exec sha256sum {} + > sha256sums.txt
           echo "## 编译信息" >> $GITHUB_STEP_SUMMARY
           echo "- **设备**: ${DEVICE}" >> $GITHUB_STEP_SUMMARY
           echo "- **版本**: ${IMMORTALWRT_VERSION}" >> $GITHUB_STEP_SUMMARY
