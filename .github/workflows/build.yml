@@ -147,16 +147,10 @@ jobs:
           cd immortalwrt
           make defconfig
           JOBS=$(nproc)
-          echo "使用 ${JOBS} 线程编译"
-          # 分批下载避免超时
-          make download -j1 V=s 2>&1 | tee download.log
-          # 检查下载结果
-          if [ -f download.log ]; then
-            if grep -q "error\|failed\|Error\|Failed" download.log; then
-              echo "::warning::Download completed with errors, checking details..."
-              grep "error\|failed\|Error\|Failed" download.log | head -20
-            fi
-          fi
+          echo "使用 ${JOBS} 线程下载"
+          # 使用简洁模式下载,仅输出错误和摘要
+          make download -j${JOBS} 2>&1 | grep -E "^(Downloading|ERROR|FAILED|make\[)" || true
+          echo "下载完成"
 
       - name: 开始编译
         run: |
@@ -165,18 +159,19 @@ jobs:
           JOBS=$(($(nproc)/2))
           if [ $JOBS -lt 1 ]; then JOBS=1; fi
           echo "使用 ${JOBS} 线程编译 (原CPU核心数: $(nproc))"
-          # 分段编译并保存日志
-          make -j${JOBS} V=s 2>&1 | tee compile.log
-          COMPILE_EXIT=${PIPESTATUS[0]}
           
-          # 检查编译结果
-          if [ $COMPILE_EXIT -ne 0 ]; then
-            echo "::error::编译失败，退出码: $COMPILE_EXIT"
-            echo "最后100行错误日志:"
-            tail -100 compile.log | grep -A5 -B5 "error\|Error\|failed\|Failed" || tail -50 compile.log
-            exit $COMPILE_EXIT
+          # 使用默认输出级别,仅在失败时保存完整日志
+          if make -j${JOBS} 2>&1 | tee compile.log; then
+            echo "✅ 编译成功完成"
           else
-            echo "编译成功完成"
+            COMPILE_EXIT=$?
+            echo "::error::编译失败，退出码: $COMPILE_EXIT"
+            echo ""
+            echo "=== 错误摘要 (最后50行) ==="
+            tail -50 compile.log
+            echo ""
+            echo "完整日志已保存到 artifact"
+            exit $COMPILE_EXIT
           fi
 
       - name: 整理固件文件
