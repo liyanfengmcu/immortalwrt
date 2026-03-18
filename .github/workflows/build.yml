@@ -162,19 +162,46 @@ jobs:
           if [ $JOBS -lt 1 ]; then JOBS=1; fi
           echo "使用 ${JOBS} 线程编译 (原CPU核心数: $(nproc))"
           
-          # 使用默认输出级别,仅在失败时保存完整日志
+          # 第一次尝试：多线程编译
+          echo "=== 第 1 次编译尝试 ==="
           if make -j${JOBS} 2>&1 | tee compile.log; then
             echo "✅ 编译成功完成"
-          else
-            COMPILE_EXIT=$?
-            echo "::error::编译失败，退出码: $COMPILE_EXIT"
-            echo ""
-            echo "=== 错误摘要 (最后50行) ==="
-            tail -50 compile.log
-            echo ""
-            echo "完整日志已保存到 artifact"
-            exit $COMPILE_EXIT
+            exit 0
           fi
+          
+          # 第一次失败，尝试重试
+          echo ""
+          echo "::warning::第 1 次编译失败，准备重试..."
+          echo "=== 失败的软件包 ==="
+          grep -E "ERROR:.*failed to build" compile.log || true
+          FAILED_PKG=$(grep -oP "package/feeds/[^/]+/\K[^/]+" compile.log | grep "ERROR" -A1 | tail -1 || echo "")
+          
+          # 第二次尝试：清理后单线程重试
+          echo ""
+          echo "=== 第 2 次编译尝试（单线程） ==="
+          if [ -n "$FAILED_PKG" ]; then
+            echo "清理失败的包: $FAILED_PKG"
+            make package/$FAILED_PKG/clean V=s || true
+          fi
+          
+          # 清理编译缓存并重试
+          make clean || true
+          
+          if make -j1 V=s 2>&1 | tee -a compile.log; then
+            echo "✅ 第 2 次编译成功"
+            exit 0
+          fi
+          
+          # 第二次也失败，输出详细错误
+          echo ""
+          echo "::error::编译最终失败"
+          echo ""
+          echo "=== 详细错误信息 ==="
+          grep -B5 -A10 "error:" compile.log | tail -50 || true
+          echo ""
+          echo "=== 失败的软件包 ==="
+          grep -E "ERROR:.*failed to build" compile.log || true
+          exit 1
 
       - name: 整理固件文件
         run: |
@@ -209,7 +236,7 @@ jobs:
 
       - name: 发布 Release
         if: github.event_name == 'workflow_dispatch'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.IMMORTALWRT_VERSION }}-${{ github.run_number }}
           name: ImmortalWrt ${{ env.DEVICE }} - ${{ env.IMMORTALWRT_VERSION }}
