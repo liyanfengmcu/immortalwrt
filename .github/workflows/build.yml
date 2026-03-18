@@ -176,28 +176,48 @@ jobs:
 
       - name: 开始编译
         id: compile
+        continue-on-error: true
         run: |
           cd immortalwrt
           export MAKEFLAGS="-j$(nproc)"
-          
+
           echo "🚀 开始编译 (预计 60-90 分钟)..."
-          if make world 2>&1 | tee compile.log; then
+          # 先检查配置是否正确
+          make defconfig
+
+          # 使用 V=s 进行详细输出以便调试
+          if make world V=s 2>&1 | tee compile.log; then
             echo "compile_status=success" >> $GITHUB_OUTPUT
             echo "✅ 编译成功"
           else
+            echo "compile_status=failed" >> $GITHUB_OUTPUT
             echo "::error::编译失败，请查看日志"
             echo "### ❌ 编译失败" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "#### 错误详情 (最后 50 行):" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
-            grep -iE "error:|fatal:|make\[[0-9]+\]: \*\*\*" compile.log | tail -20 >> $GITHUB_STEP_SUMMARY
+            tail -50 compile.log >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "#### 关键错误:" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            grep -iE "error:|fatal:|make\[[0-9]+\]: \*\*\*" compile.log | tail -30 >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: 检查编译状态
+        run: |
+          if [ "${{ steps.compile.outputs.compile_status }}" != "success" ]; then
+            echo "::error::编译失败，请查看上方日志"
             exit 1
           fi
 
       - name: 验证固件
+        if: steps.compile.outputs.compile_status == 'success'
         run: |
           cd immortalwrt
           echo "🔍 验证编译产物..."
-          
+
           # 检查镜像文件是否存在
           IMG_COUNT=$(find bin/targets/${TARGET}/${SUBTARGET} -maxdepth 1 -type f \( -name "*.img" -o -name "*.img.gz" \) | wc -l)
           if [ "$IMG_COUNT" -eq 0 ]; then
@@ -205,7 +225,7 @@ jobs:
             exit 1
           fi
           echo "✅ 找到 ${IMG_COUNT} 个镜像文件"
-          
+
           # 检查 buildinfo 文件
           find bin/targets/${TARGET}/${SUBTARGET} -maxdepth 1 -type f -name "*.buildinfo" | head -5
           echo "✅ 验证通过"
