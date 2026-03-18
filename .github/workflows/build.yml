@@ -31,6 +31,8 @@ env:
   TARGET: rockchip
   SUBTARGET: armv8
   DEVICE: 9tripod_x3568-v4
+  # 强制使用 Node.js 24 运行 actions (避免 Node.js 20 弃用警告)
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
   build:
