@@ -218,16 +218,27 @@ jobs:
           cd immortalwrt
           echo "🔍 验证编译产物..."
 
-          # 检查镜像文件是否存在
-          IMG_COUNT=$(find bin/targets/${TARGET}/${SUBTARGET} -maxdepth 1 -type f \( -name "*.img" -o -name "*.img.gz" \) | wc -l)
+          # 显示 bin 目录结构以便调试
+          echo "=== bin 目录结构 ==="
+          find bin/targets -type f -name "*.img*" 2>/dev/null | head -20 || echo "未在 bin/targets 找到 img 文件"
+          find bin -maxdepth 3 -type f -name "*.img*" 2>/dev/null | head -20 || echo "未在 bin 找到 img 文件"
+          
+          # 检查镜像文件是否存在 (多种可能的格式)
+          IMG_COUNT=$(find bin/targets/${TARGET}/${SUBTARGET} -type f \( -name "*.img" -o -name "*.img.gz" -o -name "*.img.xz" \) 2>/dev/null | wc -l)
           if [ "$IMG_COUNT" -eq 0 ]; then
-            echo "::error::未找到镜像文件"
+            # 尝试在 build_dir 中查找
+            IMG_COUNT=$(find build_dir/target-*/image -type f \( -name "*.img" -o -name "*.img.gz" -o -name "*.img.xz" \) 2>/dev/null | wc -l)
+          fi
+          if [ "$IMG_COUNT" -eq 0 ]; then
+            echo "::error::未找到镜像文件，请检查编译输出"
+            echo "=== bin 目录内容 ==="
+            ls -la bin/targets/${TARGET}/${SUBTARGET}/ 2>/dev/null || echo "目录不存在"
             exit 1
           fi
           echo "✅ 找到 ${IMG_COUNT} 个镜像文件"
 
           # 检查 buildinfo 文件
-          find bin/targets/${TARGET}/${SUBTARGET} -maxdepth 1 -type f -name "*.buildinfo" | head -5
+          find bin/targets/${TARGET}/${SUBTARGET} -type f -name "*.buildinfo" | head -5
           echo "✅ 验证通过"
 
       - name: 整理固件文件
@@ -236,23 +247,34 @@ jobs:
           cd immortalwrt
           mkdir -p firmware
 
-          # 复制并解压镜像
-          find bin/targets/${TARGET}/${SUBTARGET} -maxdepth 1 -type f \( -name "*.img.gz" -o -name "*.img" \) -exec cp {} firmware/ \;
+          # 复制并解压镜像 (支持多种格式和路径)
+          find bin/targets/${TARGET}/${SUBTARGET} -type f \( -name "*.img.gz" -o -name "*.img.xz" -o -name "*.img" \) -exec cp {} firmware/ \;
+          
+          # 如果 bin/targets 没有找到，尝试从 build_dir 复制
+          if [ ! "$(ls -A firmware 2>/dev/null)" ]; then
+            find build_dir/target-*/image -type f \( -name "*.img.gz" -o -name "*.img.xz" -o -name "*.img" \) -exec cp {} firmware/ \;
+          fi
+          
           cd firmware
+          # 解压 .img.gz 文件
           for img_gz in *.img.gz; do
             [ -f "$img_gz" ] && gunzip -f "$img_gz"
           done
+          # 解压 .img.xz 文件
+          for img_xz in *.img.xz; do
+            [ -f "$img_xz" ] && unxz -f "$img_xz"
+          done
 
           # 复制构建信息
-          find ../bin/targets/${TARGET}/${SUBTARGET} -maxdepth 1 -type f -name "*.buildinfo" -exec cp {} . \;
-          
+          find ../bin/targets/${TARGET}/${SUBTARGET} -type f -name "*.buildinfo" -exec cp {} . \;
+
           # 生成校验和
           sha256sum *.img *.buildinfo 2>/dev/null > sha256sums.txt || sha256sum * > sha256sums.txt
 
           # 输出固件信息
           echo "### 📦 固件文件" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          ls -lh *.img | awk '{print $9 ": " $5}' >> $GITHUB_STEP_SUMMARY
+          ls -lh *.img 2>/dev/null | awk '{print $9 ": " $5}' >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: 上传固件 (Artifacts)
