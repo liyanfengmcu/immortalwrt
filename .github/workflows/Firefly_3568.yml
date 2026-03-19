@@ -2,7 +2,7 @@
 # 目标设备：Firefly ROC-RK3568-PC (RK3568) - 替代 9tripod_x3568-v4
 # 原因：9tripod_x3568-v4 不是官方支持的设备，使用相同芯片的官方设备配置
 
-name: Firefly ROC-RK3568-PC
+name: ImmortalWrt Build
 
 on:
   workflow_dispatch:
@@ -245,6 +245,7 @@ jobs:
         id: compile
         continue-on-error: true
         run: |
+          set -o pipefail
           cd immortalwrt
           export MAKEFLAGS="-j$(nproc)"
 
