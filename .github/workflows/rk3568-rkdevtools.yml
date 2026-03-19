@@ -88,7 +88,12 @@ jobs:
           [ -n "${IMG_GZ}" ]
 
           IMG_NAME="$(basename "${IMG_GZ}" .gz)"
-          gunzip -c "${IMG_GZ}" > "${OUT_DIR}/${IMG_NAME}"
+          python3 - "$IMG_GZ" "${OUT_DIR}/${IMG_NAME}" << 'PY'
+import gzip, shutil, sys
+src, dst = sys.argv[1], sys.argv[2]
+with gzip.open(src, 'rb') as f_in, open(dst, 'wb') as f_out:
+    shutil.copyfileobj(f_in, f_out)
+PY
 
           LOADER_URL="https://dl.radxa.com/rock3/images/loader/rk356x_spl_loader_ddr1056_v1.12.109_no_check_todly.bin"
           curl -L --retry 3 -o "${OUT_DIR}/rk356x_loader.bin" "${LOADER_URL}"
