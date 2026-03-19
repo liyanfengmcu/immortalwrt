@@ -1,7 +1,7 @@
 # ImmortalWrt 云编译工作流
 # 目标设备：9tripod_x3568-v4 (RK3568)
 
-name: ImmortalWrt Cloud Build
+name: 9tripod_x3568-v4
 
 on:
   workflow_dispatch:
