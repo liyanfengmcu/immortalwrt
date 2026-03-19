@@ -1,0 +1,129 @@
+name: RK3568 x3568-v4 RKDevTool Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ master ]
+    paths:
+      - ".github/workflows/rk3568-rkdevtool.yml"
+  schedule:
+    - cron: "0 0 * * 0"
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Initialize environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
+            gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev \
+            file wget curl xz-utils jq python3-pyelftools
+
+      - name: Cache dl
+        uses: actions/cache@v4
+        with:
+          path: dl
+          key: immortalwrt-dl-${{ hashFiles('feeds.conf.default') }}
+          restore-keys: |
+            immortalwrt-dl-
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: immortalwrt-ccache-${{ runner.os }}-${{ github.ref_name }}
+          restore-keys: |
+            immortalwrt-ccache-${{ runner.os }}-
+
+      - name: Update and install feeds
+        run: |
+          ./scripts/feeds clean
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Generate .config (9tripod_x3568-v4)
+        run: |
+          cat > .config <<'EOF'
+          CONFIG_TARGET_rockchip=y
+          CONFIG_TARGET_rockchip_armv8=y
+          CONFIG_TARGET_PER_DEVICE_ROOTFS=y
+          CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_9tripod_x3568-v4=y
+          CONFIG_TARGET_ROOTFS_PARTSIZE=1024
+          EOF
+          make defconfig
+
+      - name: Download sources
+        env:
+          FORCE_UNSAFE_CONFIGURE: "1"
+        run: |
+          make download -j$(nproc) V=s
+
+      - name: Build firmware
+        env:
+          FORCE_UNSAFE_CONFIGURE: "1"
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+          CCACHE_COMPRESS: "1"
+          CCACHE_MAXSIZE: "2G"
+        run: |
+          make -j$(nproc) V=s
+
+      - name: Pack RKDevTool bundle (eMMC)
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT_DIR="${GITHUB_WORKSPACE}/out"
+          mkdir -p "${OUT_DIR}"
+
+          IMG_GZ="$(ls -1 bin/targets/rockchip/armv8/*9tripod*x3568*v4*sysupgrade.img.gz | head -n1)"
+          [ -n "${IMG_GZ}" ]
+
+          IMG_NAME="$(basename "${IMG_GZ}" .gz)"
+          python3 - "$IMG_GZ" "${OUT_DIR}/${IMG_NAME}" << 'PY'
+import gzip, shutil, sys
+src, dst = sys.argv[1], sys.argv[2]
+with gzip.open(src, 'rb') as f_in, open(dst, 'wb') as f_out:
+    shutil.copyfileobj(f_in, f_out)
+PY
+
+          LOADER_URL="https://dl.radxa.com/rock3/images/loader/rk356x_spl_loader_ddr1056_v1.12.109_no_check_todly.bin"
+          curl -L --retry 3 -o "${OUT_DIR}/rk356x_loader.bin" "${LOADER_URL}"
+
+          (
+            cd "${OUT_DIR}"
+            sha256sum "${IMG_NAME}" rk356x_loader.bin > SHA256SUMS.txt
+          )
+
+          cat > "${OUT_DIR}/README_RKDevTool.txt" <<'EOF'
+          RKDevTool v3.37 烧录说明（eMMC）
+          1) 设备进入 Maskrom 模式并连接 Windows。
+          2) RKDevTool 中 Storage 选择 eMMC。
+          3) Loader 选择：rk356x_loader.bin
+          4) Image 选择：*.img（本包内已解压）
+          5) Write by Address（默认）后点击 Run。
+          注意：RKDevTool 不支持直接刷 .img.gz，必须用 .img。
+          EOF
+
+          PKG="rk3568-9tripod_x3568-v4-rkdevtool-${GITHUB_RUN_NUMBER}-$(date +%Y%m%d).zip"
+          (
+            cd "${OUT_DIR}"
+            zip -9 "${PKG}" "${IMG_NAME}" rk356x_loader.bin SHA256SUMS.txt README_RKDevTool.txt
+          )
+
+          echo "PKG_NAME=${PKG}" >> "$GITHUB_ENV"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rk3568-9tripod-x3568-v4-rkdevtool
+          path: out/${{ env.PKG_NAME }}
+          retention-days: 90
