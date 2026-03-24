@@ -137,9 +137,10 @@ jobs:
         run: |
           cd openwrt
           mkdir -p ../artifact
-          find bin/targets -name "*immortalwrt*sysupgrade.bin.gz" -exec cp {} ../artifact/ \;
-          find bin/targets -name "*immortalwrt*factory.bin" -exec cp {} ../artifact/ \;
+          find bin/targets -name "*sysupgrade*" -not -name "sha256sums" -exec cp {} ../artifact/ \;
+          find bin/targets -name "*factory*" -not -name "sha256sums" -exec cp {} ../artifact/ \;
           find bin/targets -name "sha256sums" -exec cp {} ../artifact/ \;
+          echo "=== 产物列表 ==="
           ls -lh ../artifact/
 
       - name: 上传编译结果
