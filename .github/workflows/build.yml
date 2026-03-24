@@ -82,41 +82,41 @@ jobs:
       - name: 创建自定义配置
         run: |
           cd openwrt
-          cat > .config << 'EOF'
-CONFIG_TARGET_rockchip=y
-CONFIG_TARGET_rockchip_rk3568=y
-CONFIG_TARGET_rockchip_rk3568_DEVICE_9TRIPOD_X3568_V4=y
-
-# 系统配置
-CONFIG_HAS_UUID=y
-CONFIG_USE_SSTRIP=y
-CONFIG_USE_UCLIBCXX=y
-CONFIG_USE_MKLIBS=y
-
-# 包含常用软件包
-CONFIG_PACKAGE_luci=y
-CONFIG_PACKAGE_luci-theme-bootstrap=y
-CONFIG_PACKAGE_luci-app-firewall=y
-
-# 网络相关 - RTL8212F (reg addr: 0x00)
-CONFIG_PACKAGE_kmod-r8169=y
-CONFIG_PACKAGE_kmod-rtl8212f=y
-CONFIG_PACKAGE_kmod-rtl8xxxu=y
-CONFIG_PACKAGE_kmod-rtl8723ds=y
-CONFIG_PACKAGE_rtl8723ds-firmware=y
-
-# 文件系统
-CONFIG_PACKAGE_block-mount=y
-CONFIG_PACKAGE_kmod-fs-ext4=y
-CONFIG_PACKAGE_kmod-fs-f2fs=y
-
-# 实用工具
-CONFIG_PACKAGE_htop=y
-CONFIG_PACKAGE_nano=y
-CONFIG_PACKAGE_vim-full=y
-CONFIG_PACKAGE_fdisk=y
-CONFIG_PACKAGE_kmod-usb-storage=y
-EOF
+          printf '%s\n' \
+            'CONFIG_TARGET_rockchip=y' \
+            'CONFIG_TARGET_rockchip_rk3568=y' \
+            'CONFIG_TARGET_rockchip_rk3568_DEVICE_9TRIPOD_X3568_V4=y' \
+            '' \
+            '# 系统配置' \
+            'CONFIG_HAS_UUID=y' \
+            'CONFIG_USE_SSTRIP=y' \
+            'CONFIG_USE_UCLIBCXX=y' \
+            'CONFIG_USE_MKLIBS=y' \
+            '' \
+            '# 包含常用软件包' \
+            'CONFIG_PACKAGE_luci=y' \
+            'CONFIG_PACKAGE_luci-theme-bootstrap=y' \
+            'CONFIG_PACKAGE_luci-app-firewall=y' \
+            '' \
+            '# 网络相关 - RTL8212F (reg addr: 0x00)' \
+            'CONFIG_PACKAGE_kmod-r8169=y' \
+            'CONFIG_PACKAGE_kmod-rtl8212f=y' \
+            'CONFIG_PACKAGE_kmod-rtl8xxxu=y' \
+            'CONFIG_PACKAGE_kmod-rtl8723ds=y' \
+            'CONFIG_PACKAGE_rtl8723ds-firmware=y' \
+            '' \
+            '# 文件系统' \
+            'CONFIG_PACKAGE_block-mount=y' \
+            'CONFIG_PACKAGE_kmod-fs-ext4=y' \
+            'CONFIG_PACKAGE_kmod-fs-f2fs=y' \
+            '' \
+            '# 实用工具' \
+            'CONFIG_PACKAGE_htop=y' \
+            'CONFIG_PACKAGE_nano=y' \
+            'CONFIG_PACKAGE_vim-full=y' \
+            'CONFIG_PACKAGE_fdisk=y' \
+            'CONFIG_PACKAGE_kmod-usb-storage=y' \
+            > .config
           make defconfig
 
       - name: 下载依赖包
