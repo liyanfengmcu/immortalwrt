@@ -96,6 +96,7 @@ jobs:
           CONFIG_PACKAGE_fdisk=y
           CONFIG_PACKAGE_kmod-usb-storage=y
           EOF
+          make defconfig
 
       - name: 下载依赖包
         run: |
