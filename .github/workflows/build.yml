@@ -91,7 +91,7 @@ jobs:
             'CONFIG_HAS_UUID=y' \
             'CONFIG_USE_SSTRIP=y' \
             'CONFIG_USE_UCLIBCXX=y' \
-            'CONFIG_USE_MKLIBS=y' \
+            '# CONFIG_USE_MKLIBS is not set' \
             '' \
             '# 包含常用软件包' \
             'CONFIG_PACKAGE_luci=y' \
