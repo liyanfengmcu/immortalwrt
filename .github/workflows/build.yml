@@ -85,7 +85,7 @@ jobs:
           printf '%s\n' \
             'CONFIG_TARGET_rockchip=y' \
             'CONFIG_TARGET_rockchip_rk3568=y' \
-            'CONFIG_TARGET_rockchip_rk3568_DEVICE_9TRIPOD_X3568_V4=y' \
+            'CONFIG_TARGET_rockchip_rk3568_DEVICE_9TRIPOD_X3568-V4=y' \
             '' \
             '# 系统配置' \
             'CONFIG_HAS_UUID=y' \
@@ -118,7 +118,7 @@ jobs:
             'CONFIG_PACKAGE_kmod-usb-storage=y' \
             > .config
           make defconfig
-
+          grep "CONFIG_TARGET.*DEVICE" .config
       - name: 下载依赖包
         run: |
           cd openwrt
