@@ -1,14 +1,6 @@
 name: Build ImmortalWrt for 9tripod_x3568-v4
 
 on:
-  push:
-    branches:
-      - main
-      - master
-  pull_request:
-    branches:
-      - main
-      - master
   workflow_dispatch:
     inputs:
       keep_workspace:
