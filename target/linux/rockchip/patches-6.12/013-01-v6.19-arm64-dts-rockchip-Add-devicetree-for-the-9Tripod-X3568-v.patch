@@ -747,7 +747,7 @@ Signed-off-by: Heiko Stuebner <heiko@sntech.de>
 +};
 +
 +&pcie30phy {
-+	status = "okay";
++	status = "disabled";
 +};
 +
 +&pcie3x2 {
@@ -755,7 +755,7 @@ Signed-off-by: Heiko Stuebner <heiko@sntech.de>
 +	pinctrl-0 = <&pcie_reset_pin>;
 +	reset-gpios = <&gpio2 RK_PD6 GPIO_ACTIVE_HIGH>;
 +	vpcie3v3-supply = <&vcc3v3_pcie>;
-+	status = "okay";
++	status = "disabled";
 +};
 +
 +&pdm {
