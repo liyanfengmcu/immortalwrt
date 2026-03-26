@@ -57,31 +57,6 @@ jobs:
       - name: 克隆 ImmortalWrt 源码
         run: |
           git clone --depth 1 --branch $REPO_BRANCH $REPO_URL openwrt
-      - name: 覆盖板级 DTS 文件
-        run: |
-          # 内核 DTS → target/linux/rockchip/files/
-          KERNEL_DTS_DIR="openwrt/target/linux/rockchip/files/arch/arm64/boot/dts/rockchip"
-          mkdir -p "$KERNEL_DTS_DIR"
-          cp rk3568-9tripod-x3568-v4.dts "$KERNEL_DTS_DIR/"
-
-          # U-Boot DTS → package/boot/uboot-rockchip/src/arch/arm/dts/
-          UBOOT_DTS_DIR="openwrt/package/boot/uboot-rockchip/src/arch/arm/dts"
-          mkdir -p "$UBOOT_DTS_DIR"
-          cp rk3568-9tripod-x3568-v4.dts "$UBOOT_DTS_DIR/"
-          cp rk3568-9tripod-x3568-v4-u-boot.dtsi "$UBOOT_DTS_DIR/"
-
-          # 内核补丁 → target/linux/rockchip/patches-6.12/ (需要确认内核版本目录名)
-          PATCH_DIR="openwrt/target/linux/rockchip/patches-6.12"
-          if [ -d "$PATCH_DIR" ]; then
-            cp *.patch "$PATCH_DIR/" 2>/dev/null || true
-            echo "补丁已复制到 $PATCH_DIR"
-          else
-            echo "警告: 未找到 $PATCH_DIR，跳过补丁复制"
-            ls openwrt/target/linux/rockchip/ | grep patches || true
-          fi
-
-          echo "=== DTS 文件覆盖完成 ==="
-          head -5 "$KERNEL_DTS_DIR/rk3568-9tripod-x3568-v4.dts"
       - name: 加载 Feeds 配置
         run: |
           cd openwrt
