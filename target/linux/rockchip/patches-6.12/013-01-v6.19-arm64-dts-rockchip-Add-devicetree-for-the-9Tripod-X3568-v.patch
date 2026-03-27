@@ -25,7 +25,7 @@ Specification:
 - eMMC: 16-128 GB
 - RAM: 2-16 GB
 - Power: DC 12V 2A
-- Ethernet: 1x RGMII (10/100/1000 Mbps)
+- Ethernet: 2x YT8521SC RGMII (10/100/1000 Mbps)
 - Wireless radio: 802.11b/g/n/ac/ax dual-band
 - LED:
   Power: AlwaysOn
@@ -364,7 +364,20 @@ Signed-off-by: Heiko Stuebner <heiko@sntech.de>
 +};
 +
 +&gmac0 {
-+	status = "disabled";
++	assigned-clocks = <&cru SCLK_GMAC0_RX_TX>, <&cru SCLK_GMAC0>;
++	assigned-clock-parents = <&cru SCLK_GMAC0_RGMII_SPEED>;
++	assigned-clock-rates = <0>, <125000000>;
++	clock_in_out = "output";
++	pinctrl-names = "default";
++	pinctrl-0 = <&gmac0_miim
++			&gmac0_tx_bus2
++			&gmac0_rx_bus2
++			&gmac0_rgmii_clk
++			&gmac0_rgmii_bus
++			&gmac0_clkinout>;
++	phy-handle = <&rgmii_phy0>;
++	phy-mode = "rgmii-id";
++	status = "okay";
 +};
 +
 +&gmac1 {
@@ -377,14 +390,10 @@ Signed-off-by: Heiko Stuebner <heiko@sntech.de>
 +			&gmac1m1_tx_bus2
 +			&gmac1m1_rx_bus2
 +			&gmac1m1_rgmii_clk
-+			&gmac1m1_rgmii_bus>;
++			&gmac1m1_rgmii_bus
++			&gmac1m1_clkinout>;
 +	phy-handle = <&rgmii_phy1>;
-+	phy-mode = "rgmii";
-+	snps,reset-gpio = <&gpio0 RK_PC2 GPIO_ACTIVE_LOW>;
-+	snps,reset-active-low;
-+	snps,reset-delays-us = <0 20000 100000>;
-+	tx_delay = <0x42>;
-+	rx_delay = <0x32>;
++	phy-mode = "rgmii-id";
 +	status = "okay";
 +};
 +
@@ -678,13 +687,62 @@ Signed-off-by: Heiko Stuebner <heiko@sntech.de>
 +};
 +
 +&mdio0 {
-+	status = "disabled";
++	rgmii_phy0: ethernet-phy@3 {
++		compatible = "ethernet-phy-ieee802.3-c22";
++		reg = <3>;
++		reset-assert-us = <20000>;
++		reset-deassert-us = <100000>;
++		reset-gpios = <&gpio2 RK_PD3 GPIO_ACTIVE_LOW>;
++
++		leds {
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			led@1 {
++				reg = <1>;
++				color = <LED_COLOR_ID_GREEN>;
++				function = LED_FUNCTION_LAN;
++				default-state = "keep";
++			};
++
++			/* Note: The LED polarity is inverted */
++			led@2 {
++				reg = <2>;
++				color = <LED_COLOR_ID_AMBER>;
++				function = LED_FUNCTION_LAN;
++				default-state = "keep";
++			};
++		};
++	};
 +};
 +
 +&mdio1 {
-+	rgmii_phy1: ethernet-phy@0 {
++	rgmii_phy1: ethernet-phy@2 {
 +		compatible = "ethernet-phy-ieee802.3-c22";
-+		reg = <0>;
++		reg = <2>;
++		reset-assert-us = <20000>;
++		reset-deassert-us = <100000>;
++		reset-gpios = <&gpio2 RK_PD1 GPIO_ACTIVE_LOW>;
++
++		leds {
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			led@1 {
++				reg = <1>;
++				color = <LED_COLOR_ID_GREEN>;
++				function = LED_FUNCTION_LAN;
++				default-state = "keep";
++			};
++
++			/* Note: The LED polarity is inverted */
++			led@2 {
++				reg = <2>;
++				color = <LED_COLOR_ID_AMBER>;
++				function = LED_FUNCTION_LAN;
++				default-state = "keep";
++			};
++		};
 +	};
 +};
 +
@@ -924,3 +982,5 @@ Signed-off-by: Heiko Stuebner <heiko@sntech.de>
 +		remote-endpoint = <&hdmi_in_vp0>;
 +	};
 +};
+--
+2.43.0
