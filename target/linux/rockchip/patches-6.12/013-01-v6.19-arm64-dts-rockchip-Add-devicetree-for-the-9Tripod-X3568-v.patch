@@ -393,7 +393,9 @@ Signed-off-by: Heiko Stuebner <heiko@sntech.de>
 +			&gmac1m1_rgmii_bus
 +			&gmac1m1_clkinout>;
 +	phy-handle = <&rgmii_phy1>;
-+	phy-mode = "rgmii-id";
++	phy-mode = "rgmii";
++	tx_delay = <0x42>;
++	rx_delay = <0x32>;
 +	status = "okay";
 +};
 +
@@ -717,12 +719,12 @@ Signed-off-by: Heiko Stuebner <heiko@sntech.de>
 +};
 +
 +&mdio1 {
-+	rgmii_phy1: ethernet-phy@2 {
++	rgmii_phy1: ethernet-phy@0 {
 +		compatible = "ethernet-phy-ieee802.3-c22";
-+		reg = <2>;
++		reg = <0>;
 +		reset-assert-us = <20000>;
 +		reset-deassert-us = <100000>;
-+		reset-gpios = <&gpio2 RK_PD1 GPIO_ACTIVE_LOW>;
++		reset-gpios = <&gpio0 RK_PC2 GPIO_ACTIVE_LOW>;
 +
 +		leds {
 +			#address-cells = <1>;
